@@ -59,7 +59,20 @@ if uploaded_file is not None:
     else:
         st.success("✅ No issues found — safe to create as a Xero Bill")
 
-        if st.button("Create Bill in Xero"):
+        already_filed_flags = []
+        try:
+            from create_bill import load_tokens, refresh_access_token, check_already_filed
+            _tokens = load_tokens()
+            _tokens = refresh_access_token(_tokens)
+            already_filed_flags = check_already_filed(_tokens, invoice)
+        except FileNotFoundError:
+            st.info("xero_tokens.json not found — skipping duplicate-in-Xero check.")
+
+        if already_filed_flags:
+            for f in already_filed_flags:
+                st.warning(f)
+            st.error("🚫 This invoice has already been filed — skipping to avoid a duplicate bill.")
+        elif st.button("Create Bill in Xero"):
             with st.spinner("Creating bill in Xero..."):
                 try:
                     from create_bill import load_tokens, refresh_access_token, create_bill as create_xero_bill
