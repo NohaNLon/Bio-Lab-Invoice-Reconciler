@@ -77,7 +77,7 @@ def check_already_filed(tokens, invoice: dict) -> list:
     resp = requests.get(
         "https://api.xero.com/api.xro/2.0/Invoices",
         headers=xero_headers(tokens),
-        params={"where": f'Reference=="{invoice["invoice_number"]}"'},
+        params={"where": f'Reference=="{invoice["invoice_number"]}" AND Status!="DELETED"'},
     )
     resp.raise_for_status()
     existing = resp.json().get("Invoices", [])
