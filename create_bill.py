@@ -70,6 +70,26 @@ def find_or_create_contact(tokens, vendor_name):
     return create_resp.json()["Contacts"][0]["ContactID"]
 
 
+def check_already_filed(tokens, invoice: dict) -> list:
+    """Query Xero directly: has this exact invoice (by vendor + invoice number)
+    already been filed as a bill? Prevents re-filing the same invoice twice."""
+    flags = []
+    resp = requests.get(
+        "https://api.xero.com/api.xro/2.0/Invoices",
+        headers=xero_headers(tokens),
+        params={"where": f'Reference=="{invoice["invoice_number"]}"'},
+    )
+    resp.raise_for_status()
+    existing = resp.json().get("Invoices", [])
+    if existing:
+        flags.append(
+            f"ALREADY FILED: A bill with reference '{invoice['invoice_number']}' "
+            f"already exists in Xero (InvoiceID: {existing[0]['InvoiceID']}) — "
+            f"skipping to avoid duplicate payment."
+        )
+    return flags
+
+
 def create_bill(tokens, invoice: dict):
     contact_id = find_or_create_contact(tokens, invoice["vendor"])
 
@@ -120,8 +140,16 @@ if __name__ == "__main__":
     tokens = load_tokens()
     tokens = refresh_access_token(tokens)
 
+    already_filed_flags = check_already_filed(tokens, invoice)
+    if already_filed_flags:
+        for f in already_filed_flags:
+            print(f"\n⚠️  {f}")
+        print("STATUS: SKIPPED — not creating a duplicate bill.")
+        sys.exit(0)
+
     print("\nCreating Bill in Xero...")
     result = create_bill(tokens, invoice)
     created_invoice = result["Invoices"][0]
-    print(f"✅ Created Bill {created_invoice['InvoiceNumber']} — status: {created_invoice['Status']}")
+    print(f"✅ Created Bill — status: {created_invoice['Status']}")
     print(f"   InvoiceID: {created_invoice['InvoiceID']}")
+    print(f"   Reference: {created_invoice.get('Reference', 'N/A')}")
